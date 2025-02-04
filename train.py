@@ -16,7 +16,8 @@ from utils import (
 from models import create_baseline_model, create_swin_transformer
 from torch.utils.data import DataLoader
 from torchvision import transforms
-
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 def main():
     parser = argparse.ArgumentParser(description="Train a wildfire prediction model.")
     parser.add_argument("--model", type=str, default="baseline", choices=["baseline", "swin"], help="Which model to train.")
@@ -26,7 +27,8 @@ def main():
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--data_dir", type=str, default="./wildfire-prediction-dataset", help="Root directory for dataset.")
     parser.add_argument("--output_dir", type=str, default="./outputs", help="Directory to save checkpoints and plots.")
-    parser.add_argument("--use_amp", action="store_true", help="Use Automatic Mixed Precision training.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    parser.add_argument("--replace_head", action="store_true", help="Replace the head of the Swin Transformer model.")
     args = parser.parse_args()
 
     # -------------------
@@ -56,23 +58,17 @@ def main():
         transforms_dict=data_transforms
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    val_loader   = DataLoader(val_dataset,   batch_size=args.batch_size, shuffle=False, num_workers=4)
-    test_loader  = DataLoader(test_dataset,  batch_size=args.batch_size, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=8)
+    val_loader   = DataLoader(val_dataset,   batch_size=args.batch_size, shuffle=False, num_workers=8)
+    test_loader  = DataLoader(test_dataset,  batch_size=args.batch_size, shuffle=False, num_workers=8)
 
-    # -------------------
-    # Select Model
-    # -------------------
     if args.model == "baseline":
         model = create_baseline_model()
         best_model_path = output_dir / "best_baseline_model.pth"
     else:
-        model = create_swin_transformer(checkpoint_path=args.checkpoint_swin, num_classes=2)
+        model = create_swin_transformer(checkpoint_path=args.checkpoint_swin, num_classes=2, replace_head=args.replace_head)
         best_model_path = output_dir / "best_swin_model.pth"
 
-    # -------------------
-    # Prepare Training
-    # -------------------
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -84,9 +80,6 @@ def main():
     val_accuracies = []
     best_val_accuracy = 0.0
 
-    # -------------------
-    # Training Loop
-    # -------------------
     for epoch in range(args.epochs):
         print(f"\nEpoch [{epoch + 1}/{args.epochs}]")
 
@@ -97,7 +90,6 @@ def main():
             data_loader=train_loader,
             loss_fn=criterion,
             device=device,
-            use_amp=args.use_amp
         )
 
         # Validate
@@ -106,7 +98,6 @@ def main():
             data_loader=val_loader,
             loss_fn=criterion,
             device=device,
-            use_amp=args.use_amp
         )
 
         epoch_train_loss = np.mean(train_loss)
@@ -130,22 +121,15 @@ def main():
                 val_accuracy=val_accuracy
             )
 
-    # -------------------
-    # Load Best Model
-    # -------------------
     checkpoint = load_checkpoint(str(best_model_path), model, optimizer=None)
     print(f"Loaded best model from epoch {checkpoint['epoch']+1} with validation accuracy: {checkpoint['val_accuracy']:.4f}")
 
-    # -------------------
-    # Plot Training Curves
-    # -------------------
+
     plot_filename = output_dir / f"{args.model}_training_plot.png"
     plot_curves(train_losses, val_losses, val_accuracies, save_path=str(plot_filename), title_suffix=f"({args.model})")
 
-    # -------------------
-    # Test the Model
-    # -------------------
-    test_loss, test_correct = validate(model, test_loader, criterion, device=device, use_amp=args.use_amp)
+
+    test_loss, test_correct = validate(model, test_loader, criterion, device=device)
     test_accuracy = test_correct / len(test_dataset)
 
     print(f"\nTest Loss: {np.mean(test_loss):.4f} | Test Accuracy: {test_accuracy:.4f}")

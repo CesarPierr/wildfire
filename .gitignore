@@ -1,0 +1,4 @@
+wildfire-prediction-dataset/
+*.pth
+*.png
+__*
