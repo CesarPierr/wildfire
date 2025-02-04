@@ -65,7 +65,6 @@ python train.py \
     --epochs 10 \
     --batch_size 64 \
     --lr 1e-4 \
-    --use_amp
 ```
 
 ### Train the Swin Transformer
@@ -77,7 +76,6 @@ python train.py \
     --epochs 10 \
     --batch_size 32 \
     --lr 1e-4 \
-    --use_amp
 ```
 
 ---
