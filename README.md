@@ -11,8 +11,7 @@ This project trains deep learning models to predict wildfire presence from satel
 ├── utils.py                      # Helper functions (dataset prep, training, validation, plotting)
 ├── models.py                     # Model architectures (CNN, Swin Transformer)
 ├── train.py                      # Main script for training
-├── outputs/                       # Saved models & plots
-└── README.md                      # Project documentation
+└── outputs/                       # Saved models & plots
 ```
 
 ---
@@ -90,7 +89,6 @@ python train.py \
 ---
 
 ## 📝 Notes
-- `--use_amp` enables **Automatic Mixed Precision (AMP)** for faster training on GPUs.
 - Adjust `--epochs`, `--batch_size`, `--lr` as needed.
 - Ensure dataset structure matches expectations (`train/`, `valid/`, `test/`).
 
