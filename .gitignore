@@ -2,3 +2,5 @@ wildfire-prediction-dataset/
 *.pth
 *.png
 __*
+wandb/
+log.txt
