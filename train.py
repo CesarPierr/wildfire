@@ -13,15 +13,15 @@ from utils import (
     save_checkpoint,
     load_checkpoint
 )
-from models import create_baseline_model, create_swin_transformer
+from models import create_baseline_model, create_swin_transformer, create_vit_model
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 def main():
     parser = argparse.ArgumentParser(description="Train a wildfire prediction model.")
-    parser.add_argument("--model", type=str, default="baseline", choices=["baseline", "swin"], help="Which model to train.")
-    parser.add_argument("--checkpoint_swin", type=str, default="satlas-model-v1-highres.pth", help="Path to Swin checkpoint.")
+    parser.add_argument("--model", type=str, default="baseline", choices=["baseline", "swin", "vit"], help="Which model to train.")
+    parser.add_argument("--checkpoint", type=str, default="satlas-model-v1-highres.pth", help="Path to Swin checkpoint.")
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs.")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
@@ -65,9 +65,13 @@ def main():
     if args.model == "baseline":
         model = create_baseline_model()
         best_model_path = output_dir / "best_baseline_model.pth"
-    else:
-        model = create_swin_transformer(checkpoint_path=args.checkpoint_swin, num_classes=2, replace_head=args.replace_head)
+    elif args.model == "swin":
+        model = create_swin_transformer(checkpoint_path=args.checkpoint, num_classes=2, replace_head=args.replace_head)
         best_model_path = output_dir / "best_swin_model.pth"
+    elif args.model == "vit":
+        model = create_vit_model(checkpoint_path=args.checkpoint, num_classes=2, replace_head=args.replace_head)
+        best_model_path = output_dir / "best_vit_model.pth"
+        
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)

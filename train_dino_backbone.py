@@ -174,6 +174,27 @@ class DataAugmentationDINO(object):
             crops.append(self.local_transfo(image))
         return crops
 
+
+
+def evaluate(student, data_loader, device):
+    student.eval()
+    metric_logger = utils.MetricLogger(delimiter="  ")
+    header = 'Test:'
+    with torch.no_grad():
+        for image, target in metric_logger.log_every(data_loader, 10, header):
+            image = image.to(device, non_blocking=True)
+            target = target.to(device, non_blocking=True)
+            output = student(image)
+            loss = F.cross_entropy(output, target)
+            acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
+            batch_size = image.tensors.size(0)
+            metric_logger.update(loss=loss.item())
+            metric_logger.update(acc1=acc1[0], acc5=acc5[0], n=batch_size)
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print("Averaged stats:", metric_logger)
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
 def train_one_epoch(
     student,
     teacher,
