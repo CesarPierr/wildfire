@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torch.nn.functional as F
-from vision_transformer import VisionTransformer
+from vision_transformer import VisionTransformer, vit_tiny
 
 def create_baseline_model():
     """
@@ -25,7 +25,8 @@ def create_baseline_model():
         nn.BatchNorm2d(128),
         nn.ReLU(),
         nn.Dropout(0.3),
-        nn.MaxPool2d(2),
+        #average the whole channels
+        nn.AdaptiveAvgPool2d(1),
 
         nn.Flatten(),
         nn.LazyLinear(128),
@@ -34,27 +35,80 @@ def create_baseline_model():
     )
     return model
 
-
-def create_vit_model(checkpoint_path=None, num_classes=2,replace_head=True):
-    model = VisionTransformer()
-    
-    if checkpoint_path is not None:
-        model.load_state_dict(torch.load(checkpoint_path, map_location='cpu'))
-    if replace_head:
-        model.head = nn.Linear(model.head.in_features, num_classes)
-    else:
-        model.head = nn.Sequential(
-            model.head,
+class VitWithHead(nn.Module):
+    def __init__(self, backbone, num_classes=2, freeze_backbone=True, big_head=False):
+        super().__init__()
+        self.backbone = backbone
+        #delete the original head
+        del self.backbone.head
+        
+        if big_head:
+            self.head = nn.Sequential(
+                nn.Linear(192, 256),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Linear(128, num_classes)
+            )
+            
+        self.head = nn.Sequential(
+            nn.Linear(192, 256),
             nn.ReLU(),
-            nn.Linear(model.head.out_features, num_classes)
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_classes)
         )
-    for param in model.parameters():
-        param.requires_grad = False
-    for param in model.head.parameters():
-        param.requires_grad = True
+        #freeze the backbone
+        if freeze_backbone:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+
+    def forward(self, x):
+        x = self.backbone(x)
+        x = self.head(x)
+        return x
+
+
+def create_vit_model(checkpoint_path=None, 
+                     num_classes=2,  freeze_backbone=True, big_head=False) :
+    """
+    Loads a ViT tiny model, optionally from a DINO checkpoint.
+    
+    Args:
+        checkpoint_path (str): Path to the DINO checkpoint (.pth) that contains
+                               { 'student': <state_dict>, 'teacher': ..., ... }.
+        num_classes (int): Number of classes for the new classification head.
+        replace_head (bool): If True, completely replace the head with a new one.
+                             If False, stack a new Linear after the existing one.
+    
+    Returns:
+        model (nn.Module): The ViT model with updated head.
+    """
+    
+    # Create the model with the same defaults DINO used for vit_tiny
+    model = vit_tiny(
+        patch_size=16,
+        drop_path_rate=0.1,  # default in the training script
+    )
+    
+    # If a checkpoint path is provided, load the "student" state dict
+    if checkpoint_path is not None:
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        if "student" in checkpoint:
+            # The keys you actually want are in checkpoint["student"]
+            state_dict = checkpoint["student"]
+        else:
+            # In case you're using a raw state dict (not the full DINO checkpoint dict)
+            state_dict = checkpoint
+        
+        # Load the model weights
+        msg = model.load_state_dict(state_dict, strict=False)
+        print(f"Loaded checkpoint")
+
+    model = VitWithHead(model, num_classes, freeze_backbone, big_head)
     return model
 
-def create_swin_transformer(checkpoint_path=None, num_classes=2, replace_head = True) :
+def create_swin_transformer(checkpoint_path=None, num_classes=2, freeze_backbone=True, big_head=False):
 
     model = torchvision.models.swin_transformer.swin_v2_b(weights=None)
     
@@ -69,20 +123,22 @@ def create_swin_transformer(checkpoint_path=None, num_classes=2, replace_head = 
         model.load_state_dict(filtered_dict, strict=False)
     
     # Replace the classifier head
-    if replace_head : 
-        model.head = nn.Linear(model.head.in_features, num_classes)
-    else :
-        #keep the original head and add a new mlp layer after
+    if big_head:
         model.head = nn.Sequential(
-            model.head,
+            nn.Linear(model.head.in_features, 256),
             nn.ReLU(),
-            nn.Linear(model.head.out_features, num_classes)
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_classes)
         )
+    else :
+        model.head = nn.Linear(model.head.in_features, num_classes)
 
-    # Freeze all layers except the new head
-    for param in model.parameters():
-        param.requires_grad = False
-    for param in model.head.parameters():
-        param.requires_grad = True
+    if freeze_backbone:
+        # Freeze all layers except the new head
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in model.head.parameters():
+            param.requires_grad = True
 
     return model
