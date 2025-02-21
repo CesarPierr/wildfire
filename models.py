@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torch.nn.functional as F
-from vision_transformer import VisionTransformer, vit_tiny
+from vision_transformer import VisionTransformer, vit_small
 
 def create_baseline_model():
     """
@@ -41,23 +41,19 @@ class VitWithHead(nn.Module):
         self.backbone = backbone
         #delete the original head
         del self.backbone.head
-        
+        self.head = nn.Sequential(
+            nn.Linear(384, num_classes)
+        )
         if big_head:
             self.head = nn.Sequential(
-                nn.Linear(192, 256),
+                nn.Linear(384, 256),
                 nn.ReLU(),
                 nn.Linear(256, 128),
                 nn.ReLU(),
                 nn.Linear(128, num_classes)
             )
             
-        self.head = nn.Sequential(
-            nn.Linear(192, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_classes)
-        )
+
         #freeze the backbone
         if freeze_backbone:
             for param in self.backbone.parameters():
@@ -86,7 +82,7 @@ def create_vit_model(checkpoint_path=None,
     """
     
     # Create the model with the same defaults DINO used for vit_tiny
-    model = vit_tiny(
+    model = vit_small(
         patch_size=16,
         drop_path_rate=0.1,  # default in the training script
     )

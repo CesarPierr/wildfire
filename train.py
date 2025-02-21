@@ -41,7 +41,7 @@ def main():
     # Initialize WandB
     # -------------------
     wandb.init(
-        project="wildfire-prediction",  # Change to your W&B project name
+        project="wildfire-prediction-2",  # Change to your W&B project name
         config={
             "model": args.model,
             "checkpoint": args.checkpoint,
@@ -98,7 +98,7 @@ def main():
             big_head=args.big_head,
             freeze_backbone=args.freeze_backbone
         )
-        best_model_path = output_dir / "best_swin_model.pth"
+        best_model_path = output_dir / f"best_swin_model_fb-{args.freeze_backbone}_bh-{args.big_head}_checkpoint-{False if args.checkpoint is None else True}.pth"
     elif args.model == "vit":
         model = create_vit_model(
             checkpoint_path=args.checkpoint,
@@ -106,7 +106,7 @@ def main():
             big_head=args.big_head,
             freeze_backbone=args.freeze_backbone
         )
-        best_model_path = output_dir / "best_vit_model.pth"
+        best_model_path = output_dir / f"best_vit_model_fb-{args.freeze_backbone}_bh-{args.big_head}_checkpoint-{False if args.checkpoint is None else True}.pth"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
